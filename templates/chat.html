@@ -25,7 +25,7 @@
                             {% for message in messages %}
                                 <div class="message {{ message.role }}">
                                     <div class="message-bubble">
-                                        {{ message.content | safe }}
+                                        {{ message.content }}
                                         <div class="text-muted" style="font-size: 0.8rem; margin-top: 5px;">
                                             {{ message.created_at.strftime('%I:%M %p') }}
                                         </div>
@@ -36,6 +36,8 @@
                     </div>
                     <div class="card-footer">
                         <form id="chat-form" class="d-flex">
+                            {{ csrf_token() }}
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                             <input type="text" id="message-input" class="form-control me-2" 
                                    placeholder="Type your message..." required>
                             <button type="submit" class="btn btn-primary" id="send-btn">
@@ -68,7 +70,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
-        bubble.innerHTML = content;
+        bubble.textContent = content;
         
         if (timestamp) {
             const timeDiv = document.createElement('div');
@@ -131,6 +133,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
                 },
                 body: JSON.stringify({ message: message })
             });

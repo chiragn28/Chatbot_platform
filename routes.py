@@ -202,8 +202,23 @@ def send_message(project_id, session_id):
             })
         messages.append({'role': 'user', 'content': user_message})
         
-        # Generate AI response
-        ai_response = chat_with_openai(messages, project.system_prompt)
+        # Generate AI response with error handling
+        try:
+            ai_response = chat_with_openai(messages, project.system_prompt)
+        except Exception as openai_error:
+            db.session.rollback()
+            current_app.logger.error(f"OpenAI API error: {openai_error}")
+            
+            # Return specific error message based on the error type
+            error_message = "I'm experiencing technical difficulties. Please try again in a moment."
+            if "rate limit" in str(openai_error).lower():
+                error_message = "I'm currently experiencing high demand. Please wait a moment and try again."
+            elif "authentication" in str(openai_error).lower():
+                error_message = "There's an issue with the AI service configuration. Please contact support."
+            elif "timeout" in str(openai_error).lower():
+                error_message = "The request timed out. Please try again with a shorter message."
+                
+            return jsonify({'error': error_message}), 503
         
         # Save AI response
         ai_msg = ChatMessage(
@@ -240,7 +255,7 @@ def send_message(project_id, session_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Chat error: {e}")
-        return jsonify({'error': 'Failed to process message'}), 500
+        return jsonify({'error': 'An unexpected error occurred. Please try again.'}), 500
 
 @app.route('/project/<int:project_id>/upload', methods=['GET', 'POST'])
 @require_login
