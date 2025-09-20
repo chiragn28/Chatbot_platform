@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - Project Details{% endblock %}
+
+{% block content %}
+<div class="row py-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-robot me-2"></i>{{ project.name }}</h2>
+            <div>
+                <a href="{{ url_for('edit_project', project_id=project.id) }}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-edit me-1"></i>Edit
+                </a>
+                <a href="{{ url_for('chat_interface', project_id=project.id) }}" class="btn btn-primary">
+                    <i class="fas fa-comments me-1"></i>Start Chat
+                </a>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Project Information</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if project.description %}
+                            <p class="mb-3">{{ project.description }}</p>
+                        {% endif %}
+                        
+                        {% if project.system_prompt %}
+                            <h6>System Prompt:</h6>
+                            <p class="bg-light p-3 rounded">{{ project.system_prompt }}</p>
+                        {% endif %}
+                        
+                        <small class="text-muted">
+                            Created: {{ project.created_at.strftime('%B %d, %Y at %I:%M %p') }}
+                            {% if project.updated_at != project.created_at %}
+                                | Updated: {{ project.updated_at.strftime('%B %d, %Y at %I:%M %p') }}
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-history me-2"></i>Chat Sessions</h5>
+                        <a href="{{ url_for('chat_interface', project_id=project.id) }}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-plus me-1"></i>New Chat
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        {% if chat_sessions %}
+                            <div class="list-group">
+                                {% for session in chat_sessions %}
+                                    <a href="{{ url_for('chat_interface', project_id=project.id, session_id=session.id) }}" 
+                                       class="list-group-item list-group-item-action">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h6 class="mb-1">{{ session.title }}</h6>
+                                            <small>{{ session.updated_at.strftime('%b %d, %I:%M %p') }}</small>
+                                        </div>
+                                        <small class="text-muted">{{ session.messages|length }} messages</small>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-comments text-muted mb-3" style="font-size: 3rem;"></i>
+                                <h6 class="text-muted">No chat sessions yet</h6>
+                                <p class="text-muted">Start a conversation to see your chat history here.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Quick Stats</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="border-end">
+                                    <h4 class="text-primary">{{ project.chat_sessions|length }}</h4>
+                                    <small class="text-muted">Chat Sessions</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h4 class="text-success">{{ project.prompts|length }}</h4>
+                                <small class="text-muted">Saved Prompts</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Prompts</h6>
+                        <a href="{{ url_for('create_prompt', project_id=project.id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-plus"></i>
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        <a href="{{ url_for('project_prompts', project_id=project.id) }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-list me-2"></i>Manage Prompts
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-file me-2"></i>Files</h6>
+                    </div>
+                    <div class="card-body">
+                        <a href="{{ url_for('upload_file', project_id=project.id) }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-upload me-2"></i>Manage Files
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Danger Zone</h6>
+                    </div>
+                    <div class="card-body">
+                        <button class="btn btn-outline-danger w-100" onclick="deleteProject()">
+                            <i class="fas fa-trash me-2"></i>Delete Project
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteProject() {
+    if (confirm('Are you sure you want to delete this project? This action cannot be undone and will delete all chat sessions, prompts, and uploaded files.')) {
+        fetch(`/api/project/{{ project.id }}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Project deleted successfully');
+                window.location.href = '{{ url_for("dashboard") }}';
+            } else {
+                alert('Error deleting project: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting project');
+        });
+    }
+}
+</script>
+{% endblock %}

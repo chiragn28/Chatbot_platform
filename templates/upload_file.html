@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Files - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row py-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-file me-2"></i>{{ project.name }} - Files</h2>
+        </div>
+
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('project_detail', project_id=project.id) }}">{{ project.name }}</a></li>
+                <li class="breadcrumb-item active">Files</li>
+            </ol>
+        </nav>
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-upload me-2"></i>Upload New File</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Select File</label>
+                                <input type="file" class="form-control" id="file" name="file" required 
+                                       accept=".txt,.pdf,.png,.jpg,.jpeg,.gif,.doc,.docx">
+                                <div class="form-text">
+                                    Supported formats: TXT, PDF, PNG, JPG, JPEG, GIF, DOC, DOCX (Max 16MB)
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload me-2"></i>Upload File
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Uploaded Files</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if files %}
+                            <div class="list-group">
+                                {% for file in files %}
+                                    <div class="list-group-item">
+                                        <div class="d-flex w-100 justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">{{ file.original_filename }}</h6>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-weight me-1"></i>{{ "%.1f"|format(file.file_size / 1024) }} KB
+                                                    {% if file.openai_file_id %}
+                                                        | <i class="fas fa-check-circle text-success me-1"></i>Uploaded to AI
+                                                    {% endif %}
+                                                </small>
+                                            </div>
+                                            <small class="text-muted">
+                                                {{ file.created_at.strftime('%b %d, %Y') }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-file text-muted mb-3" style="font-size: 3rem;"></i>
+                                <h6 class="text-muted">No files uploaded yet</h6>
+                                <p class="text-muted">Upload files to use them in your AI conversations.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row py-3 h-100">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3><i class="fas fa-comments me-2"></i>Chat with {{ project.name }}</h3>
+            <div>
+                <a href="{{ url_for('project_detail', project_id=project.id) }}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-cog me-1"></i>Project Settings
+                </a>
+                <a href="{{ url_for('chat_interface', project_id=project.id) }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>New Chat
+                </a>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body p-0">
+                        <div id="chat-messages" class="chat-container">
+                            {% for message in messages %}
+                                <div class="message {{ message.role }}">
+                                    <div class="message-bubble">
+                                        {{ message.content | safe }}
+                                        <div class="text-muted" style="font-size: 0.8rem; margin-top: 5px;">
+                                            {{ message.created_at.strftime('%I:%M %p') }}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <form id="chat-form" class="d-flex">
+                            <input type="text" id="message-input" class="form-control me-2" 
+                                   placeholder="Type your message..." required>
+                            <button type="submit" class="btn btn-primary" id="send-btn">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    const messagesContainer = document.getElementById('chat-messages');
+    
+    function scrollToBottom() {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    
+    function addMessage(role, content, timestamp) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${role}`;
+        
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.innerHTML = content;
+        
+        if (timestamp) {
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'text-muted';
+            timeDiv.style.fontSize = '0.8rem';
+            timeDiv.style.marginTop = '5px';
+            timeDiv.textContent = new Date(timestamp).toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+            bubble.appendChild(timeDiv);
+        }
+        
+        messageDiv.appendChild(bubble);
+        messagesContainer.appendChild(messageDiv);
+        scrollToBottom();
+    }
+    
+    function showTypingIndicator() {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'message assistant';
+        typingDiv.id = 'typing-indicator';
+        
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Thinking...';
+        
+        typingDiv.appendChild(bubble);
+        messagesContainer.appendChild(typingDiv);
+        scrollToBottom();
+    }
+    
+    function hideTypingIndicator() {
+        const typingIndicator = document.getElementById('typing-indicator');
+        if (typingIndicator) {
+            typingIndicator.remove();
+        }
+    }
+    
+    chatForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const message = messageInput.value.trim();
+        if (!message) return;
+        
+        // Disable form
+        messageInput.disabled = true;
+        sendBtn.disabled = true;
+        
+        // Add user message
+        addMessage('user', message, new Date().toISOString());
+        messageInput.value = '';
+        
+        // Show typing indicator
+        showTypingIndicator();
+        
+        try {
+            const response = await fetch(`/api/chat/{{ project.id }}/{{ chat_session.id }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message: message })
+            });
+            
+            const data = await response.json();
+            
+            hideTypingIndicator();
+            
+            if (response.ok) {
+                addMessage('assistant', data.ai_response.content, data.ai_response.timestamp);
+            } else {
+                addMessage('assistant', 'Sorry, I encountered an error processing your message.', new Date().toISOString());
+                console.error('Chat error:', data.error);
+            }
+        } catch (error) {
+            hideTypingIndicator();
+            addMessage('assistant', 'Sorry, I encountered a network error. Please try again.', new Date().toISOString());
+            console.error('Network error:', error);
+        } finally {
+            // Re-enable form
+            messageInput.disabled = false;
+            sendBtn.disabled = false;
+            messageInput.focus();
+        }
+    });
+    
+    // Initial scroll to bottom
+    scrollToBottom();
+    
+    // Focus message input
+    messageInput.focus();
+});
+</script>
+{% endblock %}

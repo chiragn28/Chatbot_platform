@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Chatbot Platform{% endblock %}
+
+{% block content %}
+<div class="row py-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h2>
+            <a href="{{ url_for('create_project') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>New Project
+            </a>
+        </div>
+
+        {% if projects %}
+            <div class="row">
+                {% for project in projects %}
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-robot me-2 text-primary"></i>
+                                    {{ project.name }}
+                                </h5>
+                                {% if project.description %}
+                                    <p class="card-text text-muted">{{ project.description[:100] }}{% if project.description|length > 100 %}...{% endif %}</p>
+                                {% endif %}
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar me-1"></i>
+                                        Created {{ project.created_at.strftime('%b %d, %Y') }}
+                                    </small>
+                                    <span class="badge bg-secondary">
+                                        {{ project.chat_sessions|length }} chats
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <div class="btn-group w-100">
+                                    <a href="{{ url_for('chat_interface', project_id=project.id) }}" class="btn btn-primary">
+                                        <i class="fas fa-comments me-1"></i>Chat
+                                    </a>
+                                    <a href="{{ url_for('project_detail', project_id=project.id) }}" class="btn btn-outline-primary">
+                                        <i class="fas fa-cog me-1"></i>Manage
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-robot text-muted mb-4" style="font-size: 4rem;"></i>
+                <h3 class="text-muted">No Projects Yet</h3>
+                <p class="lead text-muted mb-4">
+                    Create your first AI agent to get started with building intelligent chatbots.
+                </p>
+                <a href="{{ url_for('create_project') }}" class="btn btn-primary btn-lg">
+                    <i class="fas fa-plus me-2"></i>Create Your First Project
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
