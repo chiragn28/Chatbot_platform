@@ -5,14 +5,14 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import (
     session, render_template, redirect, url_for, request, 
-    jsonify, flash, current_app, g
+    jsonify, flash, current_app, g, make_response
 )
 
 from app import app, db
 from models import User, Project, Prompt, ChatSession, ChatMessage, UploadedFile
 from openai_client import chat_with_openai, upload_file_to_openai
 from functools import wraps
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, set_access_cookies
 from models import User, jwt_required_with_user
 from app import csrf
 import pdfplumber
@@ -396,3 +396,14 @@ def forbidden(error):
 def internal_error(error):
     db.session.rollback()
     return render_template('500.html'), 500
+
+const csrfToken = getCookie('csrf_access_token');
+fetch('/api/chat/1/3', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken
+    },
+    credentials: 'include',
+    body: JSON.stringify({ message: message })
+});
