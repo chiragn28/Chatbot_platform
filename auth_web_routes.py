@@ -40,8 +40,8 @@ def web_login():
             'access_token_cookie', 
             access_token, 
             max_age=24*60*60,
-            httponly=True,
-            secure=False,
+            httponly=False,
+            secure=True,
             samesite='Lax'
         )
         flash(f'Welcome back, {user.first_name or user.email}!', 'success')
@@ -100,8 +100,8 @@ def web_register():
                 'access_token_cookie', 
                 access_token, 
                 max_age=24*60*60,
-                httponly=True,
-                secure=False,
+                httponly=False,
+                secure=True,
                 samesite='Lax'
             )
             flash(f'Registration successful! Welcome, {firstname or email}!', 'success')
