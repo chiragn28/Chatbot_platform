@@ -21,7 +21,7 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-body p-0">
-                        <div id="chat-messages" class="chat-container">
+                        <div id="chat-messages" class="chat-container" style="height: 500px; overflow-y: auto;">
                             {% for message in messages %}
                                 <div class="message {{ message.role }}">
                                     <div class="message-bubble">
@@ -38,7 +38,7 @@
                         <form id="chat-form" class="d-flex">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                             <input type="text" id="message-input" class="form-control me-2" 
-                                   placeholder="Type your message..." required>
+                                   placeholder="Type your message..." required autocomplete="off">
                             <button type="submit" class="btn btn-primary" id="send-btn">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
@@ -53,10 +53,22 @@
 
 {% block extra_js %}
 <script>
-function getCookie(name) {
+// Utility function to get CSRF token from meta tag or cookie
+function getCSRFToken() {
+    // Try to get from meta tag first
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    if (metaTag) {
+        return metaTag.getAttribute('content');
+    }
+    
+    // Fallback to cookie
     const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
+    const parts = value.split(`; csrf_access_token=`);
+    if (parts.length === 2) {
+        return parts.pop().split(';').shift();
+    }
+    
+    return '';
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -75,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
-        bubble.textContent = content;
+        bubble.innerHTML = content.replace(/\n/g, '<br>'); // Preserve line breaks
         
         if (timestamp) {
             const timeDiv = document.createElement('div');
@@ -101,8 +113,8 @@ document.addEventListener('DOMContentLoaded', function() {
         typingDiv.id = 'typing-indicator';
         
         const bubble = document.createElement('div');
-        bubble.className = 'message-bubble';
-        bubble.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Thinking...';
+        bubble.className = 'message-bubble typing-indicator';
+        bubble.innerHTML = '<i class="fas fa-ellipsis-h"></i>';
         
         typingDiv.appendChild(bubble);
         messagesContainer.appendChild(typingDiv);
@@ -116,6 +128,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    async function sendChatMessage(message) {
+        try {
+            const response = await fetch(`/api/chat/{{ project.id }}/{{ chat_session.id }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCSRFToken()
+                },
+                credentials: 'include', // This is crucial for sending cookies
+                body: JSON.stringify({ message: message })
+            });
+            
+            if (response.status === 401) {
+                // Handle authentication error
+                window.location.href = '/auth/login?redirect=' + encodeURIComponent(window.location.pathname);
+                return null;
+            }
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+            
+            return await response.json();
+            
+        } catch (error) {
+            console.error('Chat API error:', error);
+            throw error;
+        }
+    }
+    
     chatForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         
@@ -126,7 +169,7 @@ document.addEventListener('DOMContentLoaded', function() {
         messageInput.disabled = true;
         sendBtn.disabled = true;
         
-        // Add user message
+        // Add user message immediately
         addMessage('user', message, new Date().toISOString());
         messageInput.value = '';
         
@@ -134,35 +177,29 @@ document.addEventListener('DOMContentLoaded', function() {
         showTypingIndicator();
         
         try {
-            const response = await fetch(`/api/chat/{{ project.id }}/{{ chat_session.id }}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCookie('csrf_access_token')
-                },
-                credentials: 'include',
-                body: JSON.stringify({ message: message })
-            });
-            
-            const data = await response.json();
+            const data = await sendChatMessage(message);
             
             hideTypingIndicator();
             
-            if (response.ok) {
+            if (data) {
                 addMessage('assistant', data.ai_response.content, data.ai_response.timestamp);
-            } else {
-                addMessage('assistant', 'Sorry, I encountered an error processing your message.', new Date().toISOString());
-                console.error('Chat error:', data.error);
             }
         } catch (error) {
             hideTypingIndicator();
-            addMessage('assistant', 'Sorry, I encountered a network error. Please try again.', new Date().toISOString());
-            console.error('Network error:', error);
+            addMessage('assistant', `Error: ${error.message}`, new Date().toISOString());
         } finally {
             // Re-enable form
             messageInput.disabled = false;
             sendBtn.disabled = false;
             messageInput.focus();
+        }
+    });
+    
+    // Allow sending message with Enter key (but not Shift+Enter)
+    messageInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            chatForm.dispatchEvent(new Event('submit'));
         }
     });
     
@@ -172,36 +209,60 @@ document.addEventListener('DOMContentLoaded', function() {
     // Focus message input
     messageInput.focus();
 });
-</script>
 
-<script>
-function sendMessageToChatAPI(projectId, sessionId, message) {
-  fetch(`/api/chat/${projectId}/${sessionId}`, {
-    method: 'POST',
-    credentials: 'include',        // Essential to send cookies with the request
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': getCSRFToken() // If using CSRF
-    },
-    credentials: 'include',  // ← This is crucial for sending cookies
-    body: JSON.stringify({ message: message })
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+// Add this CSS for better styling
+const style = document.createElement('style');
+style.textContent = `
+    .chat-container {
+        padding: 20px;
+        background-color: #f8f9fa;
     }
-    return response.json();
-  })
-  .then(data => {
-    // Handle response data here
-    console.log(data);
-    // Optionally update the chat UI with the new message
-  })
-  .catch(error => {
-    console.error('Error:', error);
-  });
-}
-
-// Example usage: sendMessageToChatAPI(1, 1, "Hello, AI!");
+    
+    .message {
+        margin-bottom: 15px;
+        display: flex;
+    }
+    
+    .message.user {
+        justify-content: flex-end;
+    }
+    
+    .message.assistant {
+        justify-content: flex-start;
+    }
+    
+    .message-bubble {
+        max-width: 70%;
+        padding: 12px 16px;
+        border-radius: 18px;
+        word-wrap: break-word;
+    }
+    
+    .message.user .message-bubble {
+        background-color: #007bff;
+        color: white;
+    }
+    
+    .message.assistant .message-bubble {
+        background-color: #e9ecef;
+        color: #333;
+    }
+    
+    .typing-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .typing-indicator i {
+        animation: bounce 1.5s infinite;
+    }
+    
+    @keyframes bounce {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 1; }
+    }
+`;
+document.head.appendChild(style);
 </script>
 {% endblock %}
