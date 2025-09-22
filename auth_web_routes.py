@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, flash, make_response
+from flask import render_template, request, redirect, url_for, flash, make_response, session as flask_session
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, unset_jwt_cookies, set_access_cookies
 from datetime import timedelta
 from app import app, db
@@ -28,23 +28,28 @@ def web_login():
             flash('Invalid email or password', 'error')
             return render_template('login.html')
         
-        # Create JWT access token with longer expiration
+        # Create JWT access token
         access_token = create_access_token(
             identity=user.id, 
-            expires_delta=timedelta(days=7)  # Extend to 7 days
+            expires_delta=timedelta(days=1)
         )
         
         response = make_response(redirect(url_for('dashboard')))
         set_access_cookies(response, access_token)
         
-        # Also set a regular session variable as backup
-        from flask import session as flask_session
+        # Also set Flask session variables
         flask_session['user_id'] = user.id
+        flask_session['user_email'] = user.email
         flask_session['logged_in'] = True
+        flask_session.permanent = True
         
         flash(f'Welcome back, {user.first_name or user.email}!', 'success')
         return response
     
+    # If already logged in, redirect to dashboard
+    if flask_session.get('logged_in'):
+        return redirect(url_for('dashboard'))
+        
     return render_template('login.html')
 
 @app.route('/auth/register', methods=['GET', 'POST'])
@@ -90,26 +95,40 @@ def web_register():
             # Create JWT access token
             access_token = create_access_token(
                 identity=user.id, 
-                expires_delta=timedelta(hours=24)
+                expires_delta=timedelta(days=1)
             )
             
             response = make_response(redirect(url_for('dashboard')))
             set_access_cookies(response, access_token)
+            
+            # Set Flask session
+            flask_session['user_id'] = user.id
+            flask_session['user_email'] = user.email
+            flask_session['logged_in'] = True
+            flask_session.permanent = True
+            
             flash(f'Registration successful! Welcome, {firstname or email}!', 'success')
             return response
             
         except Exception as e:
             db.session.rollback()
+            app.logger.error(f"Registration error: {e}")
             flash('An error occurred during registration. Please try again.', 'error')
             return render_template('register.html')
     
     return render_template('register.html')
 
 @app.route('/auth/logout')
-@jwt_required()
 def web_logout():
     """Web-based logout handler."""
     response = make_response(redirect(url_for('index')))
+    
+    # Clear JWT cookies
     unset_jwt_cookies(response)
+    
+    # Clear Flask session
+    from flask import session as flask_session
+    flask_session.clear()
+    
     flash('You have been logged out successfully', 'success')
     return response
