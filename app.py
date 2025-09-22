@@ -67,6 +67,8 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Initialize database
 db = SQLAlchemy(app, model_class=Base)
 
+import models  # <-- Only after db is defined
+
 # JWT Configuration
 app.config['JWT_SECRET_KEY'] = os.environ['JWT_SECRET_KEY']
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
@@ -103,7 +105,6 @@ def inject_current_user():
 # Create database tables (only once, after models are imported)
 with app.app_context():
     try:
-        import models  # noqa: F401
         db.create_all()
         logger.info("Database tables created")
     except Exception as e:

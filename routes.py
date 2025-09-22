@@ -9,7 +9,7 @@ from flask import (
 )
 
 from app import app, db
-from models import Project, Prompt, ChatSession, ChatMessage, UploadedFile
+from models import User, Project, Prompt, ChatSession, ChatMessage, UploadedFile
 from openai_client import chat_with_openai, upload_file_to_openai
 from functools import wraps
 from flask_jwt_extended import jwt_required, get_jwt_identity
