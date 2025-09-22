@@ -75,8 +75,8 @@ def web_register():
             user = User()
             user.id = str(uuid.uuid4())
             user.email = email
-            user.firstname = firstname
-            user.lastname = lastname
+            user.first_name = firstname
+            user.last_name = lastname
             user.set_password(password)
             
             db.session.add(user)
@@ -89,14 +89,7 @@ def web_register():
             )
             
             response = make_response(redirect(url_for('dashboard')))
-            response.set_cookie(
-                'access_token_cookie', 
-                access_token, 
-                max_age=24*60*60,
-                httponly=False,
-                secure=True,
-                samesite='Lax'
-            )
+            set_access_cookies(response, access_token)
             flash(f'Registration successful! Welcome, {firstname or email}!', 'success')
             return response
             
