@@ -1,5 +1,5 @@
 from flask import render_template, request, redirect, url_for, flash, make_response
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, unset_jwt_cookies
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, unset_jwt_cookies, set_access_cookies
 from datetime import timedelta
 from app import app, db
 from models import User
@@ -34,16 +34,9 @@ def web_login():
             expires_delta=timedelta(hours=24)
         )
         
-        # Set JWT in cookie and redirect
+        # Set JWT in cookie and redirect (use Flask-JWT-Extended helper)
         response = make_response(redirect(url_for('dashboard')))
-        response.set_cookie(
-            'access_token_cookie', 
-            access_token, 
-            max_age=24*60*60,
-            httponly=False,
-            secure=True,
-            samesite='Lax'
-        )
+        set_access_cookies(response, access_token)
         flash(f'Welcome back, {user.first_name or user.email}!', 'success')
         return response
     
