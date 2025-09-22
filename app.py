@@ -57,6 +57,7 @@ app.config['JWT_TOKEN_LOCATION'] = ['headers', 'cookies']
 app.config['JWT_COOKIE_SECURE'] = True
 app.config['JWT_COOKIE_CSRF_PROTECT'] = True
 app.config['JWT_COOKIE_SAMESITE'] = 'Lax'
+app.config['JWT_SESSION_COOKIE'] = True  # Important: makes cookie behave like session cookie
 
 jwt = JWTManager(app)
 

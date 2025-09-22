@@ -18,7 +18,43 @@ from app import csrf
 import pdfplumber
 import docx
 
+from flask import session as flask_session
 
+def check_auth():
+    """Check if user is authenticated via JWT or session"""
+    # Try JWT first
+    try:
+        verify_jwt_in_request(optional=True)
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            user = User.query.get(current_user_id)
+            if user:
+                g.current_user = user
+                return True
+    except:
+        pass
+    
+    # Fallback to session auth
+    if flask_session.get('logged_in'):
+        user_id = flask_session.get('user_id')
+        if user_id:
+            user = User.query.get(user_id)
+            if user:
+                g.current_user = user
+                return True
+    
+    return False
+
+@app.before_request
+def load_user():
+    """Load user before each request"""
+    g.current_user = None
+    if check_auth():
+        return  # User is authenticated
+    
+    # For API routes, return JSON error instead of redirect
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Authentication required'}), 401
 
 # Configure file upload settings
 UPLOAD_FOLDER = 'uploads'
@@ -175,13 +211,22 @@ def chat_interface(project_id):
 @csrf.exempt
 @app.route('/api/chat/<int:project_id>/<int:session_id>', methods=['POST'])
 @jwt_required(optional=False)  # Change this line
+@csrf.exempt
+@app.route('/api/chat/<int:project_id>/<int:session_id>', methods=['POST'])
 def send_message(project_id, session_id):
     """API endpoint to send a message and get AI response"""
     try:
+        # Check authentication using our new method
+        if not check_auth():
+            return jsonify({'error': 'Authentication required'}), 401
+        
         project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
         chat_session = ChatSession.query.filter_by(id=session_id, project_id=project_id).first_or_404()
         
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data received'}), 400
+            
         user_message = data.get('message', '').strip()
         
         if not user_message:
@@ -200,7 +245,7 @@ def send_message(project_id, session_id):
             chat_session_id=session_id
         ).order_by(ChatMessage.created_at.asc()).all()
         
-        # --- NEW: Read and summarize uploaded files (all types) ---
+        # File processing (your existing code)
         uploaded_files = UploadedFile.query.filter_by(project_id=project_id).all()
         file_summaries = []
         for f in uploaded_files:
@@ -215,7 +260,7 @@ def send_message(project_id, session_id):
                 elif f.file_type in ['application/pdf', 'pdf']:
                     with pdfplumber.open(file_path) as pdf:
                         text = ''
-                        for page in pdf.pages[:3]:  # Limit to first 3 pages for brevity
+                        for page in pdf.pages[:3]:
                             text += page.extract_text() or ''
                         file_summaries.append(f"File '{f.original_filename}' (PDF):\n{text[:2048]}\n")
                 # DOCX files
@@ -234,7 +279,6 @@ def send_message(project_id, session_id):
             except Exception as e:
                 current_app.logger.warning(f"Could not read file {f.filename}: {e}")
         files_context = "\n".join(file_summaries) if file_summaries else ""
-        # --- END NEW ---
 
         # Prepare messages for OpenAI
         messages = []
@@ -250,19 +294,13 @@ def send_message(project_id, session_id):
             })
         messages.append({'role': 'user', 'content': user_message})
         
-        # Generate AI response with error handling
+        # Generate AI response
         try:
             ai_response = chat_with_openai(messages, project.system_prompt)
         except Exception as openai_error:
             db.session.rollback()
             current_app.logger.error(f"OpenAI API error: {openai_error}")
             error_message = "I'm experiencing technical difficulties. Please try again in a moment."
-            if "rate limit" in str(openai_error).lower():
-                error_message = "I'm currently experiencing high demand. Please wait a moment and try again."
-            elif "authentication" in str(openai_error).lower():
-                error_message = "There's an issue with the AI service configuration. Please contact support."
-            elif "timeout" in str(openai_error).lower():
-                error_message = "The request timed out. Please try again with a shorter message."
             return jsonify({'error': error_message}), 503
         
         # Save AI response

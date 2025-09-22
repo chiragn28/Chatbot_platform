@@ -28,15 +28,20 @@ def web_login():
             flash('Invalid email or password', 'error')
             return render_template('login.html')
         
-        # Create JWT access token
+        # Create JWT access token with longer expiration
         access_token = create_access_token(
             identity=user.id, 
-            expires_delta=timedelta(hours=24)
+            expires_delta=timedelta(days=7)  # Extend to 7 days
         )
         
-        # Set JWT in cookie and redirect (use Flask-JWT-Extended helper)
         response = make_response(redirect(url_for('dashboard')))
         set_access_cookies(response, access_token)
+        
+        # Also set a regular session variable as backup
+        from flask import session as flask_session
+        flask_session['user_id'] = user.id
+        flask_session['logged_in'] = True
+        
         flash(f'Welcome back, {user.first_name or user.email}!', 'success')
         return response
     
