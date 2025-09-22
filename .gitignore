@@ -1,0 +1,50 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Flask instance folder
+instance/
+*.db
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Environment variables
+.env
+.env.*
+
+# Uploads folder
+uploads/
+
+# VSCode settings
+.vscode/
+
+# PyCharm settings
+.idea/
+
+# macOS metadata
+.DS_Store
+
+# Logs
+*.log
+
+# Python coverage reports
+.coverage
+htmlcov/
+.coverage.*
+
+# pytest cache
+.pytest_cache/
+
+# mypy cache
+.mypy_cache/
+
+# C extensions
+*.so
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
