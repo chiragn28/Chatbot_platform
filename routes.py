@@ -275,8 +275,8 @@ def send_message(project_id, session_id):
             ai_response = chat_with_openai(messages, project.system_prompt)
         except Exception as openai_error:
             db.session.rollback()
-            current_app.logger.error(f"OpenAI API error: {openai_error}")
-            error_message = "I'm experiencing technical difficulties. Please try again in a moment."
+            current_app.logger.error(f"OpenAI API error: {openai_error}", exc_info=True)
+            error_message = f"AI error: {openai_error}"
             return jsonify({'error': error_message}), 503
         
         # Save AI response
@@ -307,8 +307,8 @@ def send_message(project_id, session_id):
         
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Chat error: {e}")
-        return jsonify({'error': 'An unexpected error occurred. Please try again.'}), 500
+        current_app.logger.error(f"Chat error: {e}", exc_info=True)
+        return jsonify({'error': f'Unexpected error: {e}'}), 500
 
 @app.route('/project/<int:project_id>/upload', methods=['GET', 'POST'])
 @jwt_required_with_user
