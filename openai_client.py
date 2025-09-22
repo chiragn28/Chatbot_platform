@@ -41,8 +41,8 @@ def chat_with_openai(messages, system_prompt=None, model="gpt-5", max_retries=3)
             response = openai.chat.completions.create(
                 model=model,
                 messages=chat_messages,
-                max_completion_tokens=1000,  # Use correct max_completion_tokens parameter
-                temperature=1,               # Set temperature to supported value 1
+                max_tokens=1000,  # <-- FIXED: use max_tokens, not max_completion_tokens
+                temperature=1,
                 timeout=30.0
             )
             return response.choices[0].message.content
