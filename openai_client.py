@@ -38,13 +38,19 @@ def chat_with_openai(messages, system_prompt=None, model="gpt-5", max_retries=3)
     
     for attempt in range(max_retries):
         try:
-            response = openai.chat.completions.create(
-                model=model,
-                messages=chat_messages,
-                max_tokens=1000,  # <-- FIXED: use max_tokens, not max_completion_tokens
-                temperature=1,
-                timeout=30.0
-            )
+            kwargs = {
+                "model": model,
+                "messages": chat_messages,
+                "temperature": 1,
+                "timeout": 30.0
+            }
+            # Use correct token parameter for gpt-5
+            if model == "gpt-5":
+                kwargs["max_completion_tokens"] = 1000
+            else:
+                kwargs["max_tokens"] = 1000
+
+            response = openai.chat.completions.create(**kwargs)
             return response.choices[0].message.content
             
         except Exception as e:
