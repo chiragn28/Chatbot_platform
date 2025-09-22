@@ -172,6 +172,7 @@ def chat_interface(project_id):
     messages = ChatMessage.query.filter_by(chat_session_id=chat_session.id).order_by(ChatMessage.created_at.asc()).all()
     return render_template('chat.html', project=project, chat_session=chat_session, messages=messages)
 
+@csrf.exempt
 @app.route('/api/chat/<int:project_id>/<int:session_id>', methods=['POST'])
 @jwt_required_with_user
 def send_message(project_id, session_id):
