@@ -5,22 +5,20 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import (
     session, render_template, redirect, url_for, request, 
-    jsonify, flash, current_app
+    jsonify, flash, current_app, g
 )
-from flask_login import current_user
 
 from app import app, db
 from models import Project, Prompt, ChatSession, ChatMessage, UploadedFile
-from replit_auth import require_login, make_replit_blueprint
 from openai_client import chat_with_openai, upload_file_to_openai
+from functools import wraps
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from models import User, jwt_required_with_user
+from app import csrf
+import pdfplumber
+import docx
 
-# Register authentication blueprint
-app.register_blueprint(make_replit_blueprint(), url_prefix="/auth")
 
-# Make session permanent
-@app.before_request
-def make_session_permanent():
-    session.permanent = True
 
 # Configure file upload settings
 UPLOAD_FOLDER = 'uploads'
@@ -34,29 +32,37 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+from flask import jsonify
+
 @app.route('/')
 def index():
     """Landing page - shows login or dashboard based on auth status"""
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
+    try:
+        verify_jwt_in_request(optional=True)
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            return redirect(url_for('dashboard'))
+    except:
+        pass
     return render_template('landing.html')
 
 @app.route('/dashboard')
-@require_login
+@jwt_required_with_user
 def dashboard():
     """Main dashboard for logged-in users"""
-    projects = Project.query.filter_by(user_id=current_user.id).all()
-    return render_template('dashboard.html', projects=projects, user=current_user)
+    projects = Project.query.filter_by(user_id=g.current_user.id).all()
+    return render_template('dashboard.html', projects=projects, user=g.current_user)
 
 @app.route('/projects')
-@require_login
+@jwt_required_with_user
 def projects():
     """List all user projects"""
-    user_projects = Project.query.filter_by(user_id=current_user.id).all()
+    user_projects = Project.query.filter_by(user_id=g.current_user.id).all()
     return render_template('projects.html', projects=user_projects)
 
 @app.route('/project/new', methods=['GET', 'POST'])
-@require_login
+@jwt_required_with_user
 def create_project():
     """Create a new project/agent"""
     if request.method == 'POST':
@@ -72,7 +78,7 @@ def create_project():
             name=name,
             description=description,
             system_prompt=system_prompt,
-            user_id=current_user.id
+            user_id=g.current_user.id
         )
         db.session.add(project)
         db.session.commit()
@@ -83,18 +89,18 @@ def create_project():
     return render_template('create_project.html')
 
 @app.route('/project/<int:project_id>')
-@require_login
+@jwt_required_with_user
 def project_detail(project_id):
     """Project detail and management page"""
-    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
     chat_sessions = ChatSession.query.filter_by(project_id=project_id).order_by(ChatSession.updated_at.desc()).all()
     return render_template('project_detail.html', project=project, chat_sessions=chat_sessions)
 
 @app.route('/project/<int:project_id>/edit', methods=['GET', 'POST'])
-@require_login
+@jwt_required_with_user
 def edit_project(project_id):
     """Edit project settings"""
-    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
     
     if request.method == 'POST':
         project.name = request.form.get('name', project.name)
@@ -109,18 +115,18 @@ def edit_project(project_id):
     return render_template('edit_project.html', project=project)
 
 @app.route('/project/<int:project_id>/prompts')
-@require_login
+@jwt_required_with_user
 def project_prompts(project_id):
     """Manage project prompts"""
-    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
     prompts = Prompt.query.filter_by(project_id=project_id).all()
     return render_template('project_prompts.html', project=project, prompts=prompts)
 
 @app.route('/project/<int:project_id>/prompts/new', methods=['GET', 'POST'])
-@require_login
+@jwt_required_with_user
 def create_prompt(project_id):
     """Create a new prompt for a project"""
-    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
     
     if request.method == 'POST':
         title = request.form.get('title')
@@ -144,10 +150,10 @@ def create_prompt(project_id):
     return render_template('create_prompt.html', project=project)
 
 @app.route('/chat/<int:project_id>')
-@require_login
+@jwt_required_with_user
 def chat_interface(project_id):
     """Chat interface for a project"""
-    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
     
     # Get or create a chat session
     session_id = request.args.get('session_id')
@@ -167,11 +173,11 @@ def chat_interface(project_id):
     return render_template('chat.html', project=project, chat_session=chat_session, messages=messages)
 
 @app.route('/api/chat/<int:project_id>/<int:session_id>', methods=['POST'])
-@require_login
+@jwt_required_with_user
 def send_message(project_id, session_id):
     """API endpoint to send a message and get AI response"""
     try:
-        project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+        project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
         chat_session = ChatSession.query.filter_by(id=session_id, project_id=project_id).first_or_404()
         
         data = request.get_json()
@@ -193,8 +199,49 @@ def send_message(project_id, session_id):
             chat_session_id=session_id
         ).order_by(ChatMessage.created_at.asc()).all()
         
+        # --- NEW: Read and summarize uploaded files (all types) ---
+        uploaded_files = UploadedFile.query.filter_by(project_id=project_id).all()
+        file_summaries = []
+        for f in uploaded_files:
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], f.filename)
+            try:
+                # TXT files
+                if f.file_type in ['text/plain', 'txt']:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
+                        content = file.read(2048)
+                        file_summaries.append(f"File '{f.original_filename}':\n{content}\n")
+                # PDF files
+                elif f.file_type in ['application/pdf', 'pdf']:
+                    with pdfplumber.open(file_path) as pdf:
+                        text = ''
+                        for page in pdf.pages[:3]:  # Limit to first 3 pages for brevity
+                            text += page.extract_text() or ''
+                        file_summaries.append(f"File '{f.original_filename}' (PDF):\n{text[:2048]}\n")
+                # DOCX files
+                elif f.file_type in [
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'application/msword', 'docx', 'doc'
+                ]:
+                    doc = docx.Document(file_path)
+                    text = '\n'.join([para.text for para in doc.paragraphs])
+                    file_summaries.append(f"File '{f.original_filename}' (DOCX):\n{text[:2048]}\n")
+                # Images and others
+                elif f.file_type.startswith('image/'):
+                    file_summaries.append(f"File '{f.original_filename}' is an image. (Image content not extracted.)\n")
+                else:
+                    file_summaries.append(f"File '{f.original_filename}' is of type {f.file_type}. Content extraction not supported.\n")
+            except Exception as e:
+                current_app.logger.warning(f"Could not read file {f.filename}: {e}")
+        files_context = "\n".join(file_summaries) if file_summaries else ""
+        # --- END NEW ---
+
         # Prepare messages for OpenAI
         messages = []
+        if files_context:
+            messages.append({
+                'role': 'system',
+                'content': f"The following files are available for this project:\n{files_context}"
+            })
         for msg in previous_messages:
             messages.append({
                 'role': msg.role,
@@ -208,8 +255,6 @@ def send_message(project_id, session_id):
         except Exception as openai_error:
             db.session.rollback()
             current_app.logger.error(f"OpenAI API error: {openai_error}")
-            
-            # Return specific error message based on the error type
             error_message = "I'm experiencing technical difficulties. Please try again in a moment."
             if "rate limit" in str(openai_error).lower():
                 error_message = "I'm currently experiencing high demand. Please wait a moment and try again."
@@ -217,7 +262,6 @@ def send_message(project_id, session_id):
                 error_message = "There's an issue with the AI service configuration. Please contact support."
             elif "timeout" in str(openai_error).lower():
                 error_message = "The request timed out. Please try again with a shorter message."
-                
             return jsonify({'error': error_message}), 503
         
         # Save AI response
@@ -227,16 +271,10 @@ def send_message(project_id, session_id):
             chat_session_id=session_id
         )
         db.session.add(ai_msg)
-        
-        # Update chat session timestamp
         chat_session.updated_at = datetime.now()
-        
-        # Update session title if it's the first message
         if chat_session.title == "New Chat" and len(previous_messages) == 0:
-            # Use first few words of user message as title
             title_words = user_message.split()[:5]
             chat_session.title = ' '.join(title_words) + ('...' if len(title_words) == 5 else '')
-        
         db.session.commit()
         
         return jsonify({
@@ -258,10 +296,10 @@ def send_message(project_id, session_id):
         return jsonify({'error': 'An unexpected error occurred. Please try again.'}), 500
 
 @app.route('/project/<int:project_id>/upload', methods=['GET', 'POST'])
-@require_login
+@jwt_required_with_user
 def upload_file(project_id):
     """Upload files to a project"""
-    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
     
     if request.method == 'POST':
         if 'file' not in request.files:
@@ -313,11 +351,12 @@ def upload_file(project_id):
     return render_template('upload_file.html', project=project, files=files)
 
 @app.route('/api/project/<int:project_id>/delete', methods=['POST'])
-@require_login
+@csrf.exempt
+@jwt_required_with_user
 def delete_project(project_id):
     """Delete a project and all associated data"""
     try:
-        project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+        project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
         
         # Delete associated files from OpenAI (if any)
         for uploaded_file in project.uploaded_files:

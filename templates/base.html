@@ -86,11 +86,12 @@
                             <li><a class="dropdown-item" href="{{ url_for('dashboard') }}"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('projects') }}"><i class="fas fa-folder me-2"></i>Projects</a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('replit_auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('web_logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+
                         </ul>
                     </div>
                 {% else %}
-                    <a class="nav-link" href="{{ url_for('replit_auth.login') }}">
+                    <a class="nav-link" href="{{ url_for('web_login') }}">
                         <i class="fas fa-sign-in-alt me-1"></i>Login
                     </a>
                 {% endif %}

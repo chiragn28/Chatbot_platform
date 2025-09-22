@@ -36,7 +36,6 @@
                     </div>
                     <div class="card-footer">
                         <form id="chat-form" class="d-flex">
-                            {{ csrf_token() }}
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                             <input type="text" id="message-input" class="form-control me-2" 
                                    placeholder="Type your message..." required>
@@ -166,5 +165,34 @@ document.addEventListener('DOMContentLoaded', function() {
     // Focus message input
     messageInput.focus();
 });
+</script>
+
+<script>
+function sendMessageToChatAPI(projectId, sessionId, message) {
+  fetch(`/api/chat/${projectId}/${sessionId}`, {
+    method: 'POST',
+    credentials: 'include',        // Essential to send cookies with the request
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ message: message })
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  })
+  .then(data => {
+    // Handle response data here
+    console.log(data);
+    // Optionally update the chat UI with the new message
+  })
+  .catch(error => {
+    console.error('Error:', error);
+  });
+}
+
+// Example usage: sendMessageToChatAPI(1, 1, "Hello, AI!");
 </script>
 {% endblock %}

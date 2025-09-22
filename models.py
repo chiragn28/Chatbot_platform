@@ -1,16 +1,20 @@
 # Database models for the chatbot platform
 from datetime import datetime
 from app import db
-from flask_dance.consumer.storage.sqla import OAuthConsumerMixin
-from flask_login import UserMixin
 from sqlalchemy import UniqueConstraint, Text, ForeignKey
 from sqlalchemy.orm import relationship
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from functools import wraps
+from flask import g
+from passlib.hash import pbkdf2_sha256 as hasher
 
-# (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
-class User(UserMixin, db.Model):
+# models.py
+
+class User(db.Model):
     __tablename__ = 'users'
-    id = db.Column(db.String, primary_key=True)
-    email = db.Column(db.String, unique=True, nullable=True)
+    id = db.Column(db.String, primary_key=True)  # You can change this to Integer if preferred
+    email = db.Column(db.String, unique=True, nullable=False)  # Make email required
+    password_hash = db.Column(db.String(255), nullable=True)  # New field for password
     first_name = db.Column(db.String, nullable=True)
     last_name = db.Column(db.String, nullable=True)
     profile_image_url = db.Column(db.String, nullable=True)
@@ -21,18 +25,20 @@ class User(UserMixin, db.Model):
     # Relationships
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
 
-# (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
-class OAuth(OAuthConsumerMixin, db.Model):
-    user_id = db.Column(db.String, db.ForeignKey(User.id))
-    browser_session_key = db.Column(db.String, nullable=False)
-    user = db.relationship(User)
+    # Password management methods
+    def set_password(self, password):
+        """Hash and set the user's password."""
+        self.password_hash = hasher.hash(password)
 
-    __table_args__ = (UniqueConstraint(
-        'user_id',
-        'browser_session_key',
-        'provider',
-        name='uq_user_browser_session_key_provider',
-    ),)
+    def check_password(self, password):
+        """Check if provided password matches the hash."""
+        return hasher.verify(password, self.password_hash) if self.password_hash else False
+
+    @property
+    def is_authenticated(self):
+        return True
+
+
 
 # Project/Agent model
 class Project(db.Model):
@@ -108,3 +114,15 @@ class UploadedFile(db.Model):
     
     # Relationships
     project = relationship("Project", back_populates="uploaded_files")
+
+def jwt_required_with_user(fn):
+    @wraps(fn)
+    @jwt_required()
+    def wrapper(*args, **kwargs):
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return {"error": "User not found"}, 404
+        g.current_user = user
+        return fn(*args, **kwargs)
+    return wrapper

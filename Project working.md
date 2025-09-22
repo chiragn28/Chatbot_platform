@@ -1,12 +1,10 @@
-# Chatbot Platform - Flask Web Application
-
+# Chatbot Platform - Flask Web Application By Chirag Nayak
 ## Project Overview
 A comprehensive Flask-based chatbot platform with user authentication, project management, and OpenAI integration. Users can create AI agents, manage conversations, upload files, and interact with state-of-the-art language models.
 
 ## Recent Changes
-- **September 20, 2025**: Complete chatbot platform implementation with all core features
+  - Complete chatbot platform implementation with all core features
   - Set up Flask application with PostgreSQL database integration
-  - Implemented Replit authentication for secure user login
   - Created comprehensive project/agent management system
   - Built real-time chat interface with OpenAI GPT-5 integration
   - Added file upload functionality with OpenAI Files API support
@@ -16,7 +14,7 @@ A comprehensive Flask-based chatbot platform with user authentication, project m
 ## User Preferences
 - Platform: Flask (Python web framework)
 - Database: PostgreSQL with SQLAlchemy ORM
-- Authentication: Replit Auth (supports Google, GitHub, X, Apple, email/password)
+- Authentication
 - AI Integration: OpenAI GPT-5 with chat completions API
 - Frontend: Bootstrap 5 with responsive design
 - File Management: Local storage with OpenAI Files API integration
