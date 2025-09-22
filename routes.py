@@ -396,14 +396,3 @@ def forbidden(error):
 def internal_error(error):
     db.session.rollback()
     return render_template('500.html'), 500
-
-const csrfToken = getCookie('csrf_access_token');
-fetch('/api/chat/1/3', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': csrfToken
-    },
-    credentials: 'include',
-    body: JSON.stringify({ message: message })
-});
