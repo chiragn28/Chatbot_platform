@@ -189,10 +189,13 @@ def chat_interface(project_id):
 
 @csrf.exempt
 @app.route('/api/chat/<int:project_id>/<int:session_id>', methods=['POST'])
-@jwt_required_with_user
 def send_message(project_id, session_id):
     """API endpoint to send a message and get AI response"""
     try:
+        # Check authentication
+        if not check_auth():
+            return jsonify({'error': 'Authentication required'}), 401
+        
         project = Project.query.filter_by(id=project_id, user_id=g.current_user.id).first_or_404()
         chat_session = ChatSession.query.filter_by(id=session_id, project_id=project_id).first_or_404()
         
@@ -218,22 +221,25 @@ def send_message(project_id, session_id):
             chat_session_id=session_id
         ).order_by(ChatMessage.created_at.asc()).all()
         
-        # File processing (unchanged)
+        # File processing
         uploaded_files = UploadedFile.query.filter_by(project_id=project_id).all()
         file_summaries = []
         for f in uploaded_files:
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], f.filename)
             try:
+                # TXT files
                 if f.file_type in ['text/plain', 'txt']:
                     with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
                         content = file.read(2048)
                         file_summaries.append(f"File '{f.original_filename}':\n{content}\n")
+                # PDF files
                 elif f.file_type in ['application/pdf', 'pdf']:
                     with pdfplumber.open(file_path) as pdf:
                         text = ''
                         for page in pdf.pages[:3]:
                             text += page.extract_text() or ''
                         file_summaries.append(f"File '{f.original_filename}' (PDF):\n{text[:2048]}\n")
+                # DOCX files
                 elif f.file_type in [
                     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                     'application/msword', 'docx', 'doc'
@@ -241,6 +247,7 @@ def send_message(project_id, session_id):
                     doc = docx.Document(file_path)
                     text = '\n'.join([para.text for para in doc.paragraphs])
                     file_summaries.append(f"File '{f.original_filename}' (DOCX):\n{text[:2048]}\n")
+                # Images and others
                 elif f.file_type.startswith('image/'):
                     file_summaries.append(f"File '{f.original_filename}' is an image. (Image content not extracted.)\n")
                 else:
