@@ -1,8 +1,12 @@
 # OpenAI client integration for chatbot functionality
-import json
 import os
 import time
+import logging
 from openai import OpenAI
+from openai import APIError, APIConnectionError, RateLimitError
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
 # do not change this unless explicitly requested by the user
@@ -11,24 +15,19 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 # Initialize OpenAI client with timeout configuration
 openai = None
 if OPENAI_API_KEY:
-    openai = OpenAI(api_key=OPENAI_API_KEY, timeout=30.0)
+    openai = OpenAI(api_key=OPENAI_API_KEY, timeout=60.0)  # Increased timeout
+else:
+    logger.error("OPENAI_API_KEY environment variable is not set!")
 
-def chat_with_openai(messages, system_prompt=None, model="gpt-5", max_retries=3):
+def chat_with_openai(messages, system_prompt=None, model="gpt-3.5-turbo", max_retries=3):
     """
     Generate a chat response using OpenAI's API with retry logic.
-    
-    Args:
-        messages: List of message dictionaries with 'role' and 'content'
-        system_prompt: Optional system prompt to prepend
-        model: Model to use (default: gpt-5)
-        max_retries: Maximum number of retry attempts
-        
-    Returns:
-        Generated response content
     """
     # Check if OpenAI is available
     if not openai:
-        raise RuntimeError("OpenAI API key is not configured")
+        error_msg = "OpenAI API key is not configured"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
     
     # Prepare messages with optional system prompt
     chat_messages = []
@@ -36,30 +35,52 @@ def chat_with_openai(messages, system_prompt=None, model="gpt-5", max_retries=3)
         chat_messages.append({"role": "system", "content": system_prompt})
     chat_messages.extend(messages)
     
+    logger.info(f"Sending request to OpenAI with {len(chat_messages)} messages")
+    
     for attempt in range(max_retries):
         try:
-            kwargs = {
-                "model": model,
-                "messages": chat_messages,
-                "temperature": 1,
-                "timeout": 30.0
-            }
-            # Use correct token parameter for gpt-5
-            if model == "gpt-5":
-                kwargs["max_completion_tokens"] = 1000
-            else:
-                kwargs["max_tokens"] = 1000
-
-            response = openai.chat.completions.create(**kwargs)
+            response = openai.chat.completions.create(
+                model=model,
+                messages=chat_messages,
+                max_tokens=1000,  # Changed to correct parameter name
+                temperature=0.7,  # More reasonable temperature
+                timeout=30.0
+            )
+            logger.info("OpenAI API call successful")
             return response.choices[0].message.content
             
-        except Exception as e:
+        except RateLimitError as e:
+            logger.warning(f"OpenAI rate limit exceeded (attempt {attempt + 1}): {e}")
             if attempt < max_retries - 1:
-                # Exponential backoff
+                wait_time = (2 ** attempt) + 1
+                logger.info(f"Waiting {wait_time} seconds before retry...")
+                time.sleep(wait_time)
+                continue
+            raise Exception("OpenAI rate limit exceeded. Please try again later.")
+            
+        except APIConnectionError as e:
+            logger.error(f"OpenAI API connection error (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
                 wait_time = (2 ** attempt) + 1
                 time.sleep(wait_time)
                 continue
-            raise Exception(f"Failed to generate chat response after {max_retries} attempts: {e}")
+            raise Exception("Failed to connect to OpenAI API. Please check your internet connection.")
+            
+        except APIError as e:
+            logger.error(f"OpenAI API error (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) + 1
+                time.sleep(wait_time)
+                continue
+            raise Exception(f"OpenAI API error: {e}")
+            
+        except Exception as e:
+            logger.error(f"Unexpected OpenAI error (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) + 1
+                time.sleep(wait_time)
+                continue
+            raise Exception(f"Failed to generate chat response: {e}")
 
 def upload_file_to_openai(file_path, purpose="assistants"):
     """
