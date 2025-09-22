@@ -180,8 +180,10 @@ function sendMessageToChatAPI(projectId, sessionId, message) {
     method: 'POST',
     credentials: 'include',        // Essential to send cookies with the request
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCSRFToken() // If using CSRF
     },
+    credentials: 'include',  // ← This is crucial for sending cookies
     body: JSON.stringify({ message: message })
   })
   .then(response => {

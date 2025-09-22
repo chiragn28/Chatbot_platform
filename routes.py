@@ -174,7 +174,7 @@ def chat_interface(project_id):
 
 @csrf.exempt
 @app.route('/api/chat/<int:project_id>/<int:session_id>', methods=['POST'])
-@jwt_required_with_user
+@jwt_required(optional=False)  # Change this line
 def send_message(project_id, session_id):
     """API endpoint to send a message and get AI response"""
     try:
